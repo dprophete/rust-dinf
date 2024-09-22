@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use ext_entry::ExtEntry;
 use file_entry::FileEntry;
+use glob::Pattern;
 use std::{
     collections::{BinaryHeap, HashMap},
     path::PathBuf,
@@ -16,21 +17,34 @@ mod utils;
 #[derive(clap::Parser, Debug)]
 #[command(about = "A basic directory info", long_about = None)]
 pub struct MainArgs {
-    #[clap(short)]
-    n: Option<u8>,
-    #[clap(long)]
-    path: Option<String>,
+    #[clap(short, default_value_t = 3, help = "Number of top items to display")]
+    n: u8,
+    #[clap(long, default_value = ".", help = "Path to directory")]
+    path: String,
+    #[clap(
+        short,
+        long,
+        default_value = "*",
+        help = "Glob pattern to filter files, ex: *.txt,*.rs"
+    )]
+    glob: String,
 }
 
 fn main() -> Result<()> {
     let args = MainArgs::parse();
-    let n = args.n.unwrap_or(3);
-    let path = args.path.unwrap_or(".".to_string());
-    traverse_current_directory(&path, n)?;
+    let n = args.n;
+    let path = args.path.to_string();
+    let glob = args.glob.to_string();
+    let patterns = glob
+        .split(",")
+        .map(|g| Pattern::new(&g))
+        .filter_map(Result::ok)
+        .collect::<Vec<Pattern>>();
+    traverse_current_directory(&path, &patterns, n)?;
     Ok(())
 }
 
-fn traverse_current_directory(path: &str, n: u8) -> Result<()> {
+fn traverse_current_directory(path: &str, patterns: &Vec<Pattern>, n: u8) -> Result<()> {
     // for top fixes
     let mut file_size_heap = BinaryHeap::<FileEntry>::new();
 
@@ -61,6 +75,7 @@ fn traverse_current_directory(path: &str, n: u8) -> Result<()> {
         }
     };
 
+    // for entry in WalkDir::new(path) {
     for entry in WalkDir::new(path) {
         let entry = entry?;
         if entry.file_type().is_dir() && entry.depth() == 1 {
@@ -70,6 +85,9 @@ fn traverse_current_directory(path: &str, n: u8) -> Result<()> {
         }
 
         if entry.file_type().is_file() {
+            if patterns.iter().all(|p| !p.matches_path(entry.path())) {
+                continue;
+            }
             nb_files += 1;
 
             let metadata = entry.metadata()?;
