@@ -8,6 +8,7 @@ usage
 ===
 - `dinf`
 - `dinf --help`
+  
 ![image](https://github.com/user-attachments/assets/add465fe-3cd9-48c7-9d1b-53af665efd51)
 
 why?
